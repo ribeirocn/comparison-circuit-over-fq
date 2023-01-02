@@ -15,7 +15,7 @@ using namespace NTL;
 using namespace helib;
 
 namespace he_cmp{
-enum CircuitType{UNI, BI, TAN};
+enum CircuitType{UNI, BI, TAN, PSM, PSMS};
 
 class Comparator{
     const Context& m_context;
@@ -75,12 +75,23 @@ class Comparator{
     vector<vector<DoubleCRT>> m_extraction_const;
     vector<vector<double>> m_extraction_const_size;
 
+    // PSM set
+    std::vector<Ptxt<BGV>> m_ss;
+    long m_ss_size;
+
+    ZZX m_polymask;
+
   	// print/hide flag for debugging
   	bool m_verbose;
 
     // create multiplicative masks for shifts
   	DoubleCRT create_shift_mask(double& size, long shift);
   	void create_all_shift_masks();
+
+    
+    void create_psm_masks();
+
+    void compute_psm_ss();
 
     // compute Patterson-Stockmeyer parameters to evaluate the comparison polynomial
     void compute_poly_params();
@@ -109,6 +120,7 @@ class Comparator{
     // send non-zero elements of a field F_{p^d} to 1 and zero to 0
     // if pow = 1, this map operates on elements of the prime field F_p
     void mapTo01_subfield(Ctxt& ctxt, long pow) const;
+
 
     // univariate comparison polynomial evaluation
     void evaluate_univar_less_poly(Ctxt& ret, Ctxt& ctxt_p_1, const Ctxt& x) const;
@@ -154,7 +166,7 @@ class Comparator{
 
 public:
   // constructor
-	Comparator(const Context& context, CircuitType type, unsigned long d, unsigned long expansion_len, const SecKey& sk, bool verbose);
+	Comparator(const Context& context, CircuitType type, unsigned long d, unsigned long expansion_len,  const SecKey& sk, bool verbose, unsigned long ss_size = 1);
 
 	const DoubleCRT& get_mask(double& size, long index) const;
   const ZZX& get_less_than_poly() const;
@@ -163,8 +175,16 @@ public:
   // decrypt and print ciphertext
   void print_decrypted(const Ctxt& ctxt) const;
 
+  // decrypt and print ciphertext
+  void print_decrypted(const Ctxt& ctxt, unsigned int i) const;
+
+  void pd(const Ctxt& ctxt, string preamble = "", int i = -1) const;
+
   // comparison function
   void compare(Ctxt& ctxt_res, const Ctxt& ctxt_x, const Ctxt& ctxt_y) const;
+
+  // Private Set Membership Function
+  void psm(Ctxt& ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) const;
 
   // minimum/maximum function for general vectors
   void min_max(Ctxt& ctxt_min, Ctxt& ctxt_max, const Ctxt& ctxt_x, const Ctxt& ctxt_y) const;
@@ -178,6 +198,9 @@ public:
   // test compare function 'runs' times
   void test_compare(long runs) const;
 
+  // test compare psm function 'runs' times
+  void test_compare_psm(long runs) const;
+
   // test min/max function 'runs' times
   void test_min_max(long runs) const;
 
@@ -186,6 +209,10 @@ public:
 
   // test array_minn function
   void test_array_min(int input_len, long depth, long runs) const;
+
+  void test_string_psm(long runs) const;
+
+
 };
 }
 

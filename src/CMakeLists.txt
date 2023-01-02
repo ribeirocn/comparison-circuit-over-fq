@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.11 FATAL_ERROR)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 ## Use -std=c++17 as default.
 set(CMAKE_CXX_STANDARD 17)
 ## Disable C++ extensions
@@ -14,11 +16,13 @@ find_package(helib REQUIRED)
 
 include_directories(${PROJECT_SOURCE_DIR})
 
-add_executable(comparison_circuit comparison_circuit.cpp comparator.cpp tools.cpp)
+add_executable(comparison_circuit comparison_circuit.cpp comparator.cpp tools.cpp findParameters.cpp)
 add_executable(sorting_circuit sorting_circuit.cpp comparator.cpp tools.cpp)
 add_executable(min_max_circuit min_max_circuit.cpp comparator.cpp tools.cpp)
+add_executable(psm_circuit psm_circuit.cpp comparator.cpp tools.cpp findParameters.cpp)
 
 target_link_libraries(comparison_circuit helib)
 target_link_libraries(sorting_circuit helib)
 target_link_libraries(min_max_circuit helib)
+target_link_libraries(psm_circuit helib)
 
