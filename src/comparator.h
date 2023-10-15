@@ -183,6 +183,8 @@ public:
   // comparison function
   void compare(Ctxt& ctxt_res, const Ctxt& ctxt_x, const Ctxt& ctxt_y) const;
 
+  void expandProd(Ctxt &ctxt_res, unsigned long p) const;
+
   // Private Set Membership Function
   void psm(Ctxt& ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) const;
 

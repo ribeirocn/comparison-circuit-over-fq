@@ -190,6 +190,13 @@ void Comparator::create_psm_masks()
 	cout << "All masks are created" << endl;
 }
 
+void printPtx(Ptxt<BGV> s, long ord_p, int blocsize) {
+	for(int i=0; i<s.size(); i++) {
+			printZZX(cout, s[i].getData(), ord_p);
+			if((i+1)%blocsize==0) std::cout << endl;
+	}
+}
+
 void Comparator::compute_psm_ss()
 {
 
@@ -220,10 +227,10 @@ void Comparator::compute_psm_ss()
 		long xss_size = m_ss_size * m_expansionLen;
 		long ss_size = ceil((double)xss_size / (double)slots);
 
-		if (ss_size > 1 && m_expansionLen > 1)
-		{
-			throw invalid_argument("Currently PSM does not work for large search spaces (bigger then slot size) if expansion Len is bigger than 1\n");
-		}
+		//if (ss_size > 1 && m_expansionLen > 1)
+		//{
+		//	throw invalid_argument("Currently PSM does not work for large search spaces (bigger then slot size) if expansion Len is bigger than 1\n");
+		//}
 		double pow = log2(m_expansionLen);
 		if (floor(pow) != pow)
 		{
@@ -240,7 +247,7 @@ void Comparator::compute_psm_ss()
 			for (uint i = 0; i < searchspace.size(); i += m_expansionLen)
 			{
 				std::stringstream ss;
-				ss << std::setw(m_slotDeg * m_expansionLen) << std::setfill('0') << i / m_expansionLen;
+				ss << std::setw(m_slotDeg * m_expansionLen) << std::setfill('0') << (t*vslots + i) / m_expansionLen;
 				string str = ss.str();
 				std::vector<char> v(str.begin(), str.end());
 
@@ -255,14 +262,15 @@ void Comparator::compute_psm_ss()
 				}
 			}
 			cout << endl;
+
 			m_ss[t] = sss;
 		}
 		m_polymask = ZZX(INIT_MONO, 0, 0);
 		if(m_slotDeg>1) {
 			for (int iCoef = 0; iCoef < m_slotDeg; iCoef++)
 			{
-						m_polymask += ZZX(INIT_MONO, iCoef, 1);
-					}			
+				m_polymask += ZZX(INIT_MONO, iCoef, 1);
+			}			
 
 		}
 	}
@@ -805,7 +813,7 @@ void Comparator::print_decrypted(const Ctxt &ctxt) const
 	}
 }
 
-void Comparator::print_decrypted(const Ctxt &ctxt, unsigned int i) const
+void Comparator::print_decrypted(const Ctxt &ctxt, unsigned int blocsize) const
 {
 	// get EncryptedArray
 	const EncryptedArray &ea = m_context.getEA();
@@ -816,8 +824,10 @@ void Comparator::print_decrypted(const Ctxt &ctxt, unsigned int i) const
 	long nSlots = ea.size();
 	vector<ZZX> decrypted(nSlots);
 	ea.decrypt(ctxt, m_sk, decrypted);
-
-	printZZX(cout, decrypted[i], ord_p);
+	for(int i=0; i < nSlots; i++) {
+		printZZX(cout, decrypted[i], ord_p);
+		if((i+1)%blocsize==0) std::cout << std::endl;
+	}
 }
 
 void Comparator::pd(const Ctxt &ctxt, string preamble, int i) const
@@ -1420,6 +1430,33 @@ void Comparator::is_zero(Ctxt &ctxt_res, const Ctxt &ctxt_z, long pow) const
 	HELIB_NTIMER_STOP(EqualityCircuit);
 }
 
+void Comparator::expandProd(Ctxt &ctxt_res, unsigned long p) const {
+
+	const EncryptedArray &ea = m_context.getEA();
+
+	HELIB_NTIMER_START(Map);
+	if (m_slotDeg > 1) {
+		mapTo01(ea, ctxt_res);
+	} else {
+		ctxt_res.power(p - 1);
+	}
+	HELIB_NTIMER_STOP(Map);
+
+	if (m_verbose) {
+		cout << "map done" << endl;
+		cout << "Capacity: " << ctxt_res.bitCapacity() << endl;
+	}
+	ctxt_res.negate();
+	ctxt_res.addConstant(ZZ(1));
+
+
+	for (long irot = m_expansionLen >> 1; irot > 0; irot >>= 1){
+		Ctxt tmp = ctxt_res;
+		ea.rotate(ctxt_res, -irot);
+		ctxt_res *= tmp;
+	}
+}
+
 void Comparator::psm(Ctxt &ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) const
 {
 
@@ -1432,9 +1469,10 @@ void Comparator::psm(Ctxt &ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) con
 	unsigned long vslots = m_expansionLen * floor(slots / m_expansionLen);
 	// unsigned long enc_base = (p - 1) >> 1;
 	const EncryptedArray &ea = m_context.getEA();
-
 	unsigned long size = m_ss_size * m_expansionLen > vslots ? vslots : m_ss_size * m_expansionLen;
-
+	std::cout << "Slots    : " << floor(slots / m_expansionLen) << std::endl;
+	std::cout << "MultiSlot: " << m_expansionLen << std::endl;
+	std::cout << "InSlot   : " << m_slotDeg << std::endl;
 	HELIB_NTIMER_START(Comparison);
 	if (m_verbose)
 	{
@@ -1465,7 +1503,6 @@ void Comparator::psm(Ctxt &ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) con
 		}
 	}
 	HELIB_NTIMER_STOP(Rotation);
-
 	if (m_verbose)
 	{
 		cout << "pattern done" << endl;
@@ -1477,22 +1514,49 @@ void Comparator::psm(Ctxt &ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) con
 	ctxt_res = ctxt_pattern;
 	ctxt_res -= ss[0];
 
-	for (uint t = 1; t < ss.size(); t++)
-	{ // for ss size bigger than 1, expansion len must be 1
-		Ctxt tmp = ctxt_pattern;
-		tmp -= ss[t];
-		ctxt_prev = ctxt_res;
-		ctxt_res *= tmp;
-	}
+	if( ss.size() > 1) {
+		if(m_expansionLen>1) expandProd(ctxt_res, p);
+		// Product
+		for (uint t = 1; t < ss.size(); t++)
+		{ // for ss size bigger than 1, expansion len must be 1
+			Ctxt tmp = ctxt_pattern;
+			tmp -= ss[t];
+			ctxt_prev = ctxt_res;
+			if(m_expansionLen>1) {
+				expandProd(tmp, p);
+				ctxt_res += tmp;
+			} else {
+				ctxt_res *= tmp;
+			}
+		}
+	} 
+	// Ciphertext steelling 
 	if (m_ss_size > slots && m_ss_size % slots)
 	{ // for ss size bigger than 1, expansion len must be 1
 		double size;
 		DoubleCRT mask = get_mask(size, 0);
+		  //std::cout << "Res: " << std::endl;
+		  //print_decrypted(ctxt_res,m_expansionLen);
+		  //std::cout << std::endl;
+		  //std::cout << std::endl;
 		ctxt_res.multByConstant(mask, size);
+		  //std::cout << "Res After kill Mask: " << std::endl;
+		  //print_decrypted(ctxt_res,m_expansionLen);
+		  //std::cout << std::endl;
+		  //std::cout << std::endl;
 		mask = get_mask(size, 1);
 		ctxt_prev.multByConstant(mask, size);
+		  //std::cout << "Prev After Kill Mask: " << std::endl;
+		  //print_decrypted(ctxt_prev,m_expansionLen);
+		  //std::cout << std::endl;
+		  //std::cout << std::endl;
 		ctxt_res += ctxt_prev;
+		  //std::cout << "Final: " << std::endl;
+		  //print_decrypted(ctxt_res,m_expansionLen);
+		  //std::cout << std::endl;
+		  //std::cout << std::endl;
 	}
+
 	HELIB_NTIMER_STOP(Sub);
 
 	if (m_verbose)
@@ -1502,28 +1566,27 @@ void Comparator::psm(Ctxt &ctxt_res, Ctxt ctxt, const vector<Ptxt<BGV>> &ss) con
 	}
 	// Map every slot to 0 or 1: 0 if slot = 0, 1 if slot <> 0
 
-	HELIB_NTIMER_START(Map);
+	if(ss.size() == 1 || m_expansionLen==1) {
 
-	if (m_slotDeg > 1)
-	{
-		mapTo01(ea, ctxt_res);
+		HELIB_NTIMER_START(Map);
+		if (m_slotDeg > 1) {
+			mapTo01(ea, ctxt_res);
+		} else {
+			ctxt_res.power(p - 1);
+		}
+	
+		HELIB_NTIMER_STOP(Map);
+
+		if (m_verbose)
+		{
+			cout << "map done" << endl;
+			cout << "Capacity: " << ctxt_res.bitCapacity() << endl;
+		}
+		ctxt_res.negate();
+		ctxt_res.addConstant(ZZ(1));
 	}
-	else
-	{
-		ctxt_res.power(p - 1);
-	}
 
-	HELIB_NTIMER_STOP(Map);
-
-	if (m_verbose)
-	{
-		cout << "map done" << endl;
-		cout << "Capacity: " << ctxt_res.bitCapacity() << endl;
-	}
-	ctxt_res.negate();
-	ctxt_res.addConstant(ZZ(1));
-
-	if (m_expansionLen > 1)
+	if (ss.size() == 1 && m_expansionLen > 1 )
 	{ // if > 1 must be power of 2
 		for (long irot = m_expansionLen >> 1; irot > 0; irot >>= 1)
 		{

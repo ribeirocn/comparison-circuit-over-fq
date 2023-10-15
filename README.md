@@ -34,7 +34,7 @@ The following lines compares the execution of a PSM test with a univariate 1, wh
     ./comparison_circuit P 65537 1 65536 730 1 10 y
     ./comparison_circuit U 65537 1 65536 730 1 1 y
 ### String Comparison
-String comparasion is different in the sense that two strings are naturally divided in digits of character size
+String comparison is different in the sense that two strings are naturally divided in digits of character size
 Strings may be packing in two different ways. One more compact and one more efficient. The UniSlot is more compact and the MultiSlot is more efficient
 
     ./psm_circuit S p d m q l N runs print_debug_info
